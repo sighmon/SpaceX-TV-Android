@@ -88,6 +88,7 @@ import java.time.Duration
 import java.time.Instant
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
+import java.util.LinkedHashMap
 
 private val SpaceBlack = Color(0xFF05070A)
 private val Panel = Color(0xFF111722)
@@ -766,7 +767,7 @@ private fun PlayerScreen(state: SpaceXTvState, onBack: () -> Unit) {
     var hasPlaybackStarted by remember(resolved?.streamUrl) { mutableStateOf(false) }
     Box(Modifier.fillMaxSize().background(Color.Black)) {
         when {
-            resolved != null -> VideoPlayer(resolved.streamUrl, onPlaybackStarted = { hasPlaybackStarted = true })
+            resolved != null -> VideoPlayer(resolved.streamUrl, onPlaybackStarted = { hasPlaybackStarted = true }, onPlaybackEnded = onBack)
             state.playerError != null -> CenterMessage(state.playerError)
             else -> CenterMessage("Resolving stream...")
         }
@@ -783,7 +784,7 @@ private fun PlayerScreen(state: SpaceXTvState, onBack: () -> Unit) {
 }
 
 @Composable
-private fun VideoPlayer(url: String, onPlaybackStarted: () -> Unit) {
+private fun VideoPlayer(url: String, onPlaybackStarted: () -> Unit, onPlaybackEnded: () -> Unit) {
     val context = LocalContext.current
     AndroidView(
         modifier = Modifier.fillMaxSize(),
@@ -800,6 +801,9 @@ private fun VideoPlayer(url: String, onPlaybackStarted: () -> Unit) {
                     start()
                     onPlaybackStarted()
                     controller.hide()
+                }
+                setOnCompletionListener {
+                    onPlaybackEnded()
                 }
                 setOnClickListener {
                     controller.show(3_000)
@@ -823,21 +827,29 @@ private fun VideoPlayer(url: String, onPlaybackStarted: () -> Unit) {
 
 @Composable
 private fun GalleryScreen(broadcast: Broadcast, onBack: () -> Unit) {
-    BackHandler(onBack = onBack)
+    var fullScreenImage by remember(broadcast.id) { mutableStateOf<GalleryImage?>(null) }
+    if (fullScreenImage != null) {
+        BackHandler { fullScreenImage = null }
+    } else {
+        BackHandler(onBack = onBack)
+    }
     BoxWithConstraints(Modifier.fillMaxSize()) {
         val compact = maxWidth < 600.dp
         Column(Modifier.fillMaxSize().padding(if (compact) 18.dp else 48.dp)) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            BasicText(broadcast.title, maxLines = 1, overflow = TextOverflow.Ellipsis, style = TextStyle(Color.White, fontSize = if (compact) 22.sp else 28.sp, fontWeight = FontWeight.Bold))
-            Spacer(Modifier.width(20.dp))
-            HeaderIconButton(R.drawable.ic_arrow_back, "Back", onBack)
-        }
-        Spacer(Modifier.height(26.dp))
-        LazyRow(horizontalArrangement = Arrangement.spacedBy(24.dp)) {
-            items(broadcast.galleryImages) { image ->
-                GalleryImageTile(image, compact)
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                BasicText(broadcast.title, maxLines = 1, overflow = TextOverflow.Ellipsis, style = TextStyle(Color.White, fontSize = if (compact) 22.sp else 28.sp, fontWeight = FontWeight.Bold))
+                Spacer(Modifier.width(20.dp))
+                HeaderIconButton(R.drawable.ic_arrow_back, "Back", onBack)
+            }
+            Spacer(Modifier.height(26.dp))
+            LazyRow(horizontalArrangement = Arrangement.spacedBy(24.dp)) {
+                items(broadcast.galleryImages) { image ->
+                    GalleryImageTile(image, compact, onClick = { fullScreenImage = image })
+                }
             }
         }
+        fullScreenImage?.let { image ->
+            FullScreenGalleryImage(image, onDismiss = { fullScreenImage = null })
         }
     }
 }
@@ -924,9 +936,38 @@ private fun collectionEntries(collection: Broadcast): List<CollectionEntry> {
 }
 
 @Composable
-private fun GalleryImageTile(image: GalleryImage, compact: Boolean) {
-    Box(Modifier.width(if (compact) 300.dp else 620.dp).aspectRatio(16f / 10f).clip(RoundedCornerShape(8.dp)).background(Panel)) {
+private fun GalleryImageTile(image: GalleryImage, compact: Boolean, onClick: (() -> Unit)? = null) {
+    val interactionSource = remember { MutableInteractionSource() }
+    val focused by interactionSource.collectIsFocusedAsState()
+    val clickable = if (onClick != null) {
+        Modifier.clickable(interactionSource = interactionSource, indication = null, onClick = onClick)
+    } else {
+        Modifier
+    }
+    Box(
+        Modifier
+            .width(if (compact) 300.dp else 620.dp)
+            .aspectRatio(16f / 10f)
+            .clip(RoundedCornerShape(8.dp))
+            .background(if (focused) PanelFocused else Panel)
+            .border(if (focused) 4.dp else 1.dp, if (focused) FocusOutline else Color.Transparent, RoundedCornerShape(8.dp))
+            .then(clickable)
+    ) {
         RemoteImage(image.url, Modifier.fillMaxSize())
+    }
+}
+
+@Composable
+private fun FullScreenGalleryImage(image: GalleryImage, onDismiss: () -> Unit) {
+    Box(
+        Modifier
+            .fillMaxSize()
+            .background(Color.Black)
+            .clickable(onClick = onDismiss),
+        contentAlignment = Alignment.Center,
+    ) {
+        RemoteImage(image.url, Modifier.fillMaxSize())
+        HeaderIconButton(R.drawable.ic_arrow_back, "Back", onDismiss, Modifier.align(Alignment.TopStart).padding(24.dp))
     }
 }
 
@@ -1020,14 +1061,18 @@ private fun HeaderIconButton(
 
 @Composable
 private fun RemoteImage(url: String?, modifier: Modifier) {
-    var bitmap by remember(url) { mutableStateOf<Bitmap?>(null) }
+    var bitmap by remember(url) { mutableStateOf(BitmapMemoryCache.get(url)) }
     LaunchedEffect(url) {
-        bitmap = null
+        bitmap = BitmapMemoryCache.get(url)
         if (!url.isNullOrBlank()) {
-            bitmap = withContext(Dispatchers.IO) {
+            val loaded = bitmap ?: withContext(Dispatchers.IO) {
                 runCatching {
                     URL(url).openStream().use { BitmapFactory.decodeStream(it) }
                 }.getOrNull()
+            }
+            if (loaded != null) {
+                BitmapMemoryCache.put(url, loaded)
+                bitmap = loaded
             }
         }
     }
@@ -1038,6 +1083,21 @@ private fun RemoteImage(url: String?, modifier: Modifier) {
         Box(modifier.background(Color(0xFF151D28))) {
             BasicText("SPACEX", modifier = Modifier.align(Alignment.Center), style = TextStyle(Color(0xFF6F7F94), fontSize = 18.sp, fontWeight = FontWeight.Bold))
         }
+    }
+}
+
+private object BitmapMemoryCache {
+    private const val MaxEntries = 80
+    private val images = object : LinkedHashMap<String, Bitmap>(MaxEntries, 0.75f, true) {
+        override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, Bitmap>?): Boolean = size > MaxEntries
+    }
+
+    @Synchronized
+    fun get(url: String?): Bitmap? = if (url.isNullOrBlank()) null else images[url]
+
+    @Synchronized
+    fun put(url: String, bitmap: Bitmap) {
+        images[url] = bitmap
     }
 }
 
