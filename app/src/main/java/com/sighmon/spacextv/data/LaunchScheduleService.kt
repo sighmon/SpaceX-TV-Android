@@ -14,13 +14,13 @@ class LaunchScheduleService(private val http: HttpClient = HttpClient()) {
             val timing = timings.optJSONObject(tile.optString("correlationId")) ?: return@mapNotNull null
             val launchDate = timing.launchDate() ?: return@mapNotNull null
             NextLaunch(
-                title = tile.optString("shortTitle").ifBlank { tile.optString("title").ifBlank { "SpaceX Launch" } },
-                vehicle = tile.optString("vehicle").ifBlank { null },
-                launchSite = tile.optString("launchSite").ifBlank { null },
+                title = tile.cleanString("shortTitle") ?: tile.cleanString("title") ?: "SpaceX Launch",
+                vehicle = tile.cleanString("vehicle"),
+                launchSite = tile.cleanString("launchSite"),
                 launchDate = launchDate,
                 windowCloseDate = timing.optJSONObject("PrimaryLaunchWindow")?.optJSONObject("Close")?.timestamp(),
                 isLaunchTimePrecise = timing.optBoolean("IsPrimaryLaunchTimeGiven"),
-                sourceUrl = "https://www.spacex.com/launches/${tile.optString("link")}",
+                sourceUrl = "https://www.spacex.com/launches/${tile.cleanString("link").orEmpty()}",
                 imageUrl = tile.optJSONObject("imageDesktop")?.bestLaunchImageUrl(),
             )
         }
@@ -44,6 +44,12 @@ private fun JSONObject.timestamp(): Instant? {
 }
 
 private fun JSONObject.bestLaunchImageUrl(): String? {
-    optJSONObject("formats")?.optJSONObject("large")?.optString("url")?.ifBlank { null }?.let { return it }
-    return optString("url").ifBlank { null }
+    optJSONObject("formats")?.optJSONObject("large")?.cleanString("url")?.let { return it }
+    return cleanString("url")
+}
+
+private fun JSONObject.cleanString(key: String): String? {
+    val value = opt(key)
+    if (value == null || value == JSONObject.NULL) return null
+    return value.toString().trim().takeUnless { it.isBlank() || it.equals("null", ignoreCase = true) }
 }

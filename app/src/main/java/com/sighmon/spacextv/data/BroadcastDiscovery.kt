@@ -452,7 +452,13 @@ private fun List<BroadcastCandidate>.deduplicatedX(): List<BroadcastCandidate> {
 }
 
 private fun JSONObject.broadcastTitle(): String =
-    optString("text").lines().firstOrNull { it.isNotBlank() }?.trim()?.take(90)?.ifBlank { null } ?: "SpaceX Broadcast"
+    optString("text")
+        .lines()
+        .asSequence()
+        .map { it.withoutLinks().trim() }
+        .firstOrNull { it.isNotBlank() }
+        ?.take(90)
+        ?: "SpaceX Broadcast"
 
 private fun JSONObject.broadcastUrlFromEntities(): String? {
     val urls = optJSONObject("entities")?.optJSONArray("urls")?.asObjects() ?: return null
@@ -553,6 +559,10 @@ private fun JSONObject.missionSummary(): String? =
         ?.firstNotNullOfOrNull { it.optString("content").stripHtml().trim().ifBlank { null } }
 
 private fun String.stripHtml(): String = replace(Regex("<[^>]+>"), "")
+
+private fun String.withoutLinks(): String =
+    replace(Regex("""https?://\S+"""), "")
+        .replace(Regex("""\s+"""), " ")
 
 private fun String.normalizedTitle(): String = lowercase().replace(Regex("""\s+"""), " ").trim()
 
