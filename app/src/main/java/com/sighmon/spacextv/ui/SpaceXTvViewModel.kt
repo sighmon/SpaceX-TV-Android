@@ -440,16 +440,16 @@ private fun JSONArray.toBroadcasts(): List<Broadcast> = (0 until length()).mapNo
     optJSONObject(index)?.let { objectValue ->
         Broadcast(
             id = objectValue.optString("id"),
-            title = objectValue.optString("title"),
-            subtitle = objectValue.optString("subtitle"),
+            title = objectValue.cleanString("title") ?: "SpaceX Broadcast",
+            subtitle = objectValue.cleanString("subtitle") ?: "Broadcast",
             sourceUrl = objectValue.optString("sourceUrl"),
             sourceKind = enumValueOrDefault(objectValue.optString("sourceKind"), SourceKind.X_BROADCAST),
             contentKind = enumValueOrDefault(objectValue.optString("contentKind"), ContentKind.VIDEO),
-            streamUrl = objectValue.optString("streamUrl").ifBlank { null },
-            fallbackStreamUrl = objectValue.optString("fallbackStreamUrl").ifBlank { null },
-            tweetText = objectValue.optString("tweetText").ifBlank { null },
-            publishedAt = objectValue.optString("publishedAt").ifBlank { null }?.let { Instant.parse(it) },
-            thumbnailUrl = objectValue.optString("thumbnailUrl").ifBlank { null },
+            streamUrl = objectValue.cleanString("streamUrl"),
+            fallbackStreamUrl = objectValue.cleanString("fallbackStreamUrl"),
+            tweetText = objectValue.cleanString("tweetText"),
+            publishedAt = objectValue.cleanString("publishedAt")?.let { Instant.parse(it) },
+            thumbnailUrl = objectValue.cleanString("thumbnailUrl"),
             galleryImages = objectValue.optJSONArray("galleryImages")?.toGalleryImages() ?: emptyList(),
             mediaItems = objectValue.optJSONArray("mediaItems")?.toMediaItems() ?: emptyList(),
             isPinned = objectValue.optBoolean("isPinned"),
@@ -484,3 +484,9 @@ private fun JSONArray.toStringList(): List<String> = (0 until length()).map { op
 
 private inline fun <reified T : Enum<T>> enumValueOrDefault(value: String, default: T): T =
     runCatching { enumValueOf<T>(value) }.getOrDefault(default)
+
+private fun JSONObject.cleanString(key: String): String? {
+    val value = opt(key)
+    if (value == null || value == JSONObject.NULL) return null
+    return value.toString().trim().takeUnless { it.isBlank() || it.equals("null", ignoreCase = true) }
+}

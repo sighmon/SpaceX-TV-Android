@@ -208,13 +208,13 @@ class BroadcastDiscovery(
             val urls = media.playbackUrls(prefersMp4Playback) ?: return@mapNotNull null
             BroadcastCandidate(
                 statusUrl = urls.first,
-                dedupeKey = "spacex-starship-$kind:${media.optString("documentId").ifBlank { media.optString("link").ifBlank { urls.first } }}",
+                dedupeKey = "spacex-starship-$kind:${media.cleanString("documentId") ?: media.cleanString("link") ?: urls.first}",
                 streamUrl = null,
                 fallbackStreamUrl = urls.second,
-                title = media.optString("title").ifBlank { "SpaceX ${kind.replaceFirstChar { it.uppercase() }}" },
+                title = media.cleanString("title") ?: "SpaceX ${kind.replaceFirstChar { it.uppercase() }}",
                 subtitle = if (kind == "talk") media.bestStarshipTalkSubtitle() else media.bestSubtitle("Starship film"),
                 tweetText = media.bestDescription(),
-                publishedAt = media.optString("date").toInstantOrNull(),
+                publishedAt = media.cleanString("date").toInstantOrNull(),
                 thumbnailUrl = media.optJSONObject("poster")?.bestImageUrl(),
                 sourceKind = SourceKind.HLS,
                 isAppendedSpaceXContent = true,
@@ -229,13 +229,13 @@ class BroadcastDiscovery(
             val urls = media.playbackUrls(prefersMp4Playback) ?: return@mapNotNull null
             BroadcastCandidate(
                 statusUrl = urls.first,
-                dedupeKey = "spacex-starship-flight-test:${media.mediaFlightTestKey() ?: media.optString("documentId").ifBlank { urls.first }}",
+                dedupeKey = "spacex-starship-flight-test:${media.mediaFlightTestKey() ?: media.cleanString("documentId") ?: urls.first}",
                 streamUrl = null,
                 fallbackStreamUrl = urls.second,
-                title = media.optString("title").ifBlank { "Starship Flight Test" },
+                title = media.cleanString("title") ?: "Starship Flight Test",
                 subtitle = media.bestSubtitle("Starship flight test"),
                 tweetText = media.bestDescription(),
-                publishedAt = media.optString("date").toInstantOrNull(),
+                publishedAt = media.cleanString("date").toInstantOrNull(),
                 thumbnailUrl = media.optJSONObject("poster")?.bestImageUrl(),
                 sourceKind = SourceKind.HLS,
                 isAppendedSpaceXContent = true,
@@ -254,10 +254,10 @@ class BroadcastDiscovery(
                     statusUrl = webcast?.first ?: tile.sourceUrl(),
                     dedupeKey = "spacex-starship-flight-test:${tile.starshipFlightTestKey()}",
                     streamUrl = null,
-                    title = tile.optString("shortTitle").ifBlank { tile.optString("title").ifBlank { "Starship Flight Test" } },
+                    title = tile.cleanString("shortTitle") ?: tile.cleanString("title") ?: "Starship Flight Test",
                     subtitle = "Starship flight test",
-                    tweetText = mission?.missionSummary() ?: tile.optString("description").ifBlank { null },
-                    publishedAt = tile.optString("date").toInstantOrNull() ?: tile.optString("publishedAt").toInstantOrNull(),
+                    tweetText = mission?.missionSummary() ?: tile.cleanString("description"),
+                    publishedAt = tile.cleanString("date").toInstantOrNull() ?: tile.cleanString("publishedAt").toInstantOrNull(),
                     thumbnailUrl = mission?.missionImageUrl() ?: tile.tileImageUrl(),
                     allowsDeferredStreamResolution = sourceKind == SourceKind.X_BROADCAST && webcast?.first != null,
                     sourceKind = sourceKind,
@@ -476,50 +476,50 @@ private fun JSONObject.thumbnailUrlFromEntities(): String? =
         ?.firstNotNullOfOrNull { it.optJSONArray("images")?.asObjects()?.maxByOrNull { image -> image.optInt("width") * image.optInt("height") }?.optString("url") }
 
 private fun JSONObject.bestImageUrl(): String? {
-    optString("url").ifBlank { null }?.let { return it }
+    cleanString("url")?.let { return it }
     optJSONObject("formats")?.let { formats ->
         listOf("large", "medium", "small", "thumbnail").forEach { key ->
-            formats.optJSONObject(key)?.optString("url")?.ifBlank { null }?.let { return it }
+            formats.optJSONObject(key)?.cleanString("url")?.let { return it }
         }
     }
     return null
 }
 
 private fun JSONObject.playbackUrls(prefersMp4Playback: Boolean): Pair<String, String?>? {
-    val mp4 = listOf("uhdLink", "hdLink", "link").firstNotNullOfOrNull { optString(it).takeIf { value -> value.startsWith("http") } }
-    val hls = listOf("uhdStreamingLink", "hdStreamingLink", "streamingLink").firstNotNullOfOrNull { optString(it).takeIf { value -> value.startsWith("http") } }
+    val mp4 = listOf("uhdLink", "hdLink", "link").firstNotNullOfOrNull { cleanString(it)?.takeIf { value -> value.startsWith("http") } }
+    val hls = listOf("uhdStreamingLink", "hdStreamingLink", "streamingLink").firstNotNullOfOrNull { cleanString(it)?.takeIf { value -> value.startsWith("http") } }
     val primary = if (prefersMp4Playback) mp4 ?: hls else hls ?: mp4
     val fallback = if (primary == mp4) hls else mp4
     return primary?.let { it to fallback }
 }
 
 private fun JSONObject.bestDescription(): String? =
-    optString("description").ifBlank { optString("longDescription").ifBlank { null } }
+    cleanString("description") ?: cleanString("longDescription")
 
 private fun JSONObject.bestSubtitle(prefix: String): String =
-    optString("category").ifBlank { prefix }
+    cleanString("category") ?: prefix
 
 private fun JSONObject.bestStarshipTalkSubtitle(): String = "Starship talk"
 
 private fun JSONObject.mediaFlightTestKey(): String? =
-    (optString("title") + " " + optString("link")).lowercase()
+    listOfNotNull(cleanString("title"), cleanString("link")).joinToString(" ").lowercase()
         .let { Regex("""flight[- ]?(\d+)""").find(it)?.groupValues?.getOrNull(1)?.let { number -> "flight-$number" } }
 
 private fun JSONObject.isStarshipFlightTestTile(): Boolean =
-    listOf(optString("title"), optString("shortTitle"), optString("link")).any { it.contains("starship", ignoreCase = true) }
+    listOfNotNull(cleanString("title"), cleanString("shortTitle"), cleanString("link")).any { it.contains("starship", ignoreCase = true) }
 
 private fun JSONObject.starshipFlightTestKey(): String =
-    listOf(optString("shortTitle"), optString("title"), optString("link")).joinToString(" ").lowercase()
-        .let { Regex("""flight[- ]?(\d+)""").find(it)?.groupValues?.getOrNull(1)?.let { number -> "flight-$number" } ?: optString("link") }
+    listOfNotNull(cleanString("shortTitle"), cleanString("title"), cleanString("link")).joinToString(" ").lowercase()
+        .let { Regex("""flight[- ]?(\d+)""").find(it)?.groupValues?.getOrNull(1)?.let { number -> "flight-$number" } ?: cleanString("link").orEmpty() }
 
-private fun JSONObject.sourceUrl(): String = "https://www.spacex.com/launches/${optString("link")}"
+private fun JSONObject.sourceUrl(): String = "https://www.spacex.com/launches/${cleanString("link").orEmpty()}"
 
 private fun JSONObject.tileImageUrl(): String? = optJSONObject("imageDesktop")?.bestImageUrl()
 
 private fun JSONObject.missionImageUrl(): String? =
     optJSONObject("image")?.bestImageUrl()
         ?: optJSONObject("imageDesktop")?.bestImageUrl()
-        ?: optString("imageUrl").ifBlank { null }
+        ?: cleanString("imageUrl")
 
 private fun JSONObject.preferredWebcast(): Pair<String, SourceKind>? {
     optJSONArray("webcasts")?.asObjects()?.let { webcasts ->
@@ -563,6 +563,12 @@ private fun String.stripHtml(): String = replace(Regex("<[^>]+>"), "")
 private fun String.withoutLinks(): String =
     replace(Regex("""https?://\S+"""), "")
         .replace(Regex("""\s+"""), " ")
+
+private fun JSONObject.cleanString(key: String): String? {
+    val value = opt(key)
+    if (value == null || value == JSONObject.NULL) return null
+    return value.toString().trim().takeUnless { it.isBlank() || it.equals("null", ignoreCase = true) }
+}
 
 private fun String.normalizedTitle(): String = lowercase().replace(Regex("""\s+"""), " ").trim()
 
