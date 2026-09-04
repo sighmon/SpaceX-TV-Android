@@ -3,6 +3,7 @@
 Android TV port of the SwiftUI/tvOS/iOS [SpaceX TV](https://github.com/sighmon/SpaceX-TV) app.
 
 <img src="android-tv.png" width="100%" />
+
 <img src="android-phone-1.png" width="30%" /> <img src="android-phone-2.png" width="30%" /> <img src="android-phone-3.png" width="30%" />
 
 The app is implemented in Kotlin with Jetpack Compose for TV dependencies and a TV-first focusable UI. It discovers SpaceX broadcasts from either the shared hosted X API cache or a user-supplied bearer token, appends Starship media from SpaceX's public CMS playlists, shows the next launch countdown, supports photo galleries and multi-media collections, and plays resolved HLS/MP4 streams.
