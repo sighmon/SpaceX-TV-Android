@@ -10,10 +10,10 @@ android {
 
     defaultConfig {
         applicationId = "com.sighmon.spacextv"
-        minSdk = 26
+        minSdk = 23
         targetSdk = 36
-        versionCode = 4
-        versionName = "1.0"
+        versionCode = 5
+        versionName = "1.1"
     }
 
     buildFeatures {
@@ -21,6 +21,8 @@ android {
     }
 
     compileOptions {
+        // Backport java.time for Android 6 and 7.
+        isCoreLibraryDesugaringEnabled = true
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
     }
@@ -33,6 +35,7 @@ android {
 }
 
 dependencies {
+    coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.5")
     implementation(platform("androidx.compose:compose-bom:2025.05.01"))
     implementation("androidx.activity:activity-compose:1.10.1")
     implementation("androidx.compose.foundation:foundation")

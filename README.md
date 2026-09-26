@@ -36,7 +36,7 @@ Android parity included through this commit:
 - Settings footer with app icon, `Made on Earth by humans`, `T+` watch timer, and Android version name/code.
 - Player debug overlay and total viewing time tracking.
 - YouTube launch links open through Android's external `ACTION_VIEW` handler.
-- Installable on Android TV, Android tablets, and Android phones.
+- Installable on Android TV, Android tablets, and Android phones running Android 6.0 (API 23) or newer.
 
 Platform differences:
 
@@ -51,6 +51,8 @@ Platform differences:
 ```
 
 Use JDK 17 or newer to build. If your system Java is too old, set `org.gradle.java.home` locally in `~/.gradle/gradle.properties` or via your shell/IDE environment rather than committing a machine-specific path.
+
+Core library desugaring provides the app's `java.time` APIs on Android 6 and 7.
 
 ## Settings
 
